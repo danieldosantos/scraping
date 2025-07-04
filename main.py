@@ -9,6 +9,7 @@ with sync_playwright() as p:
     navegador = p.chromium.launch(headless=False)
     pagina = navegador.new_page()
     pagina.goto("https://www.fabricadolivro.com.br/livro2", timeout=60000)
+    pagina.wait_for_selector('[data-testid="price"]', timeout=15000)
 
     pagina.wait_for_selector("h1", timeout=15000)
     nome_produto = pagina.locator("h1").nth(0).inner_text()
