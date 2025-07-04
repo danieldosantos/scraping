@@ -1,0 +1,8 @@
+*.xlsx
+*.json
+*.log
+ms-playwright/
+chrome-win/
+**/*.dll
+**/*.exe
+__pycache__/
