@@ -21,15 +21,21 @@ with sync_playwright() as p:
         opcoes_por_grupo.append((grupo, opcoes, nomes_opcoes))
 
     todas_combinacoes = list(product(*[g[1] for g in opcoes_por_grupo]))
+    preco_locator = pagina.locator('[data-testid="price"]')
 
     for combinacao in todas_combinacoes:
+        preco_anterior = preco_locator.inner_text().strip()
+
         for opcao in combinacao:
             opcao.click()
             pagina.wait_for_timeout(300)
 
-        preco_element = pagina.query_selector('[data-testid="price"]')
-        preco = preco_element.inner_text().strip() if preco_element else "?"
+        pagina.wait_for_function(
+            "(prev) => document.querySelector('[data-testid=\"price\"]').innerText.trim() !== prev",
+            preco_anterior,
+        )
 
+        preco = preco_locator.inner_text().strip()
         variacoes = [opcao.inner_text().strip() for opcao in combinacao]
 
         dados.append({
@@ -37,6 +43,10 @@ with sync_playwright() as p:
             "Preço": preco,
             "Variações": variacoes
         })
+
+        for opcao in combinacao:
+            opcao.click()
+            pagina.wait_for_timeout(300)
 
     navegador.close()
 
