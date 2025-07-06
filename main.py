@@ -15,8 +15,32 @@ def scrape(url: str, headless: bool = True):
         pagina = navegador.new_page()
         pagina.goto(url, timeout=60_000, wait_until="domcontentloaded")
 
-        pagina.wait_for_selector("h1", timeout=15_000)
-        nome_produto = pagina.locator("h1").nth(0).inner_text()
+        # Tenta obter o nome do produto pelo elemento <h1>.
+        # Se não encontrar ou o texto estiver vazio, usa o meta "og:title"
+        # ou o título da página como fallback. Qualquer falha resulta em
+        # "desconhecido" para evitar erros durante a extração.
+        try:
+            pagina.wait_for_selector("h1", timeout=15_000)
+            nome_produto = pagina.locator("h1").nth(0).inner_text().strip()
+            if not nome_produto:
+                raise ValueError("h1 vazio")
+        except (TimeoutError, ValueError):
+            try:
+                nome_produto = (
+                    pagina.locator("meta[property='og:title']")
+                    .nth(0)
+                    .get_attribute("content")
+                    or ""
+                ).strip()
+                if not nome_produto:
+                    raise ValueError("meta og:title vazio")
+            except Exception:
+                try:
+                    nome_produto = pagina.title().strip()
+                    if not nome_produto:
+                        raise ValueError("título vazio")
+                except Exception:
+                    nome_produto = "desconhecido"
 
         grupos = pagina.query_selector_all('[class*="MuiFormGroup-root"]')
         opcoes_por_grupo = [g.query_selector_all("label") for g in grupos]
