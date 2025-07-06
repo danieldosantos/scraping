@@ -1,6 +1,6 @@
 # scraping
 
-This repository contains a script that extracts variations and prices from the website [FabricadoLivro](https://www.fabricadolivro.com.br/livro2) using Playwright. The results are saved in Excel and JSON formats.
+This repository contains a script that extracts all product variations and prices from a fixed page on [FabricadoLivro](https://www.fabricadolivro.com.br/livro2) using Playwright. The results are saved in `livro2_variacoes_completas.xlsx` and `livro2_variacoes_completas.json`.
 
 ## Setup and usage
 
@@ -23,8 +23,14 @@ This repository contains a script that extracts variations and prices from the w
    playwright install
    ```
 
-4. **Run the script** to generate `livro2_variacoes.xlsx` and `livro2_variacoes.json`:
+4. **Run the script** to generate `livro2_variacoes_completas.xlsx` and `livro2_variacoes_completas.json`:
 
    ```bash
    python main.py
+   ```
+
+   To see the browser while scraping, run:
+
+   ```bash
+   HEADLESS=0 python main.py
    ```
