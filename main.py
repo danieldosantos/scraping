@@ -1,90 +1,100 @@
 import json
-import pandas as pd
+import os
 from itertools import product
-from playwright.sync_api import sync_playwright
 
-dados = []
+import pandas as pd
+from playwright.sync_api import TimeoutError, sync_playwright
 
-with sync_playwright() as p:
-    navegador = p.chromium.launch(headless=False)
-    pagina = navegador.new_page()
-    pagina.goto("https://www.fabricadolivro.com.br/imprimir-livros2/26887", timeout=60000)
 
-    pagina.wait_for_selector("h1", timeout=15000)
-    nome_produto = pagina.locator("h1").nth(0).inner_text()
+def scrape(url: str, headless: bool = True):
+    """Extrai as variações do produto e retorna uma lista de dicionários."""
 
-    # Seletores dos grupos de opções
-    grupos = pagina.query_selector_all('[class*="MuiFormGroup-root"]')
-    opcoes_por_grupo = []
-    for grupo in grupos:
-        opcoes = grupo.query_selector_all('label')
-        opcoes_por_grupo.append(opcoes)
+    dados = []
+    with sync_playwright() as p:
+        navegador = p.chromium.launch(headless=headless)
+        pagina = navegador.new_page()
+        pagina.goto(url, timeout=60_000, wait_until="domcontentloaded")
 
-    # Combinações de opções
-    todas_combinacoes = list(product(*opcoes_por_grupo))
+        pagina.wait_for_selector("h1", timeout=15_000)
+        nome_produto = pagina.locator("h1").nth(0).inner_text()
 
-    for combinacao in todas_combinacoes:
-        for opcao in combinacao:
-            opcao.click()
-            pagina.wait_for_timeout(300)
+        grupos = pagina.query_selector_all('[class*="MuiFormGroup-root"]')
+        opcoes_por_grupo = [g.query_selector_all("label") for g in grupos]
 
-        # Aguarda atualização de preço
-        pagina.wait_for_timeout(1000)
+        todas_combinacoes = list(product(*opcoes_por_grupo))
 
-        # Coleta o preço total e unitário
-        try:
-            preco_total = pagina.locator('text=VALOR TOTAL').nth(0).element_handle().evaluate("e => e.nextElementSibling.innerText")
-            preco_unitario = pagina.locator('text=VALOR UNITÁRIO').nth(0).element_handle().evaluate("e => e.nextElementSibling.innerText")
-        except:
-            preco_total = "?"
-            preco_unitario = "?"
+        for combinacao in todas_combinacoes:
+            for opcao in combinacao:
+                opcao.click()
+                pagina.wait_for_timeout(300)
 
-        # Coleta os campos do resumo
-        resumo_dados = {}
-        campos_resumo = pagina.query_selector_all("#Resumo div div")
-        for i in range(0, len(campos_resumo)-1, 2):
-            chave = campos_resumo[i].inner_text().strip().replace(":", "")
-            valor = campos_resumo[i+1].inner_text().strip()
-            resumo_dados[chave] = valor
+            pagina.wait_for_timeout(1_000)
 
-        # Coleta os nomes das variações da combinação atual
-        variacoes = [opcao.inner_text().strip() for opcao in combinacao]
+            try:
+                preco_total = (
+                    pagina.locator("text=/VALOR TOTAL/i")
+                    .nth(0)
+                    .evaluate("e => e.nextElementSibling.innerText")
+                )
+                preco_unitario = (
+                    pagina.locator("text=/VALOR UNIT\xc3\x81RIO/i")
+                    .nth(0)
+                    .evaluate("e => e.nextElementSibling.innerText")
+                )
+            except TimeoutError:
+                preco_total = "?"
+                preco_unitario = "?"
 
-        dados.append({
-            "Produto": nome_produto,
-            "Preço Total": preco_total,
-            "Preço Unitário": preco_unitario,
-            "Variações": variacoes,
-            "Resumo": resumo_dados
-        })
+            resumo_dados = {}
+            campos_resumo = pagina.query_selector_all("#Resumo div div")
+            for i in range(0, len(campos_resumo) - 1, 2):
+                chave = campos_resumo[i].inner_text().strip().replace(":", "")
+                valor = campos_resumo[i + 1].inner_text().strip()
+                resumo_dados[chave] = valor
 
-        # Reseta as seleções clicadas (opcional, dependendo da lógica do site)
-        for opcao in combinacao:
-            opcao.click()
-            pagina.wait_for_timeout(200)
+            variacoes = [op.inner_text().strip() for op in combinacao]
 
-    navegador.close()
+            dados.append(
+                {
+                    "Produto": nome_produto,
+                    "Preço Total": preco_total,
+                    "Preço Unitário": preco_unitario,
+                    "Variações": variacoes,
+                    "Resumo": resumo_dados,
+                }
+            )
 
-# Estrutura para Excel
-linhas_excel = []
-for item in dados:
-    linha = {
-        "Produto": item["Produto"],
-        "Preço Total": item["Preço Total"],
-        "Preço Unitário": item["Preço Unitário"],
-    }
-    for i, v in enumerate(item["Variações"]):
-        linha[f"Variação {i+1}"] = v
-    for k, v in item["Resumo"].items():
-        linha[k] = v
-    linhas_excel.append(linha)
+            for opcao in combinacao:
+                opcao.click()
+                pagina.wait_for_timeout(200)
 
-# Salvar em Excel
-df = pd.DataFrame(linhas_excel)
-df.to_excel("livro2_variacoes_completas.xlsx", index=False)
+        navegador.close()
 
-# Salvar em JSON
-with open("livro2_variacoes_completas.json", "w", encoding="utf-8") as f:
-    json.dump(dados, f, indent=2, ensure_ascii=False)
+    return dados
 
-print("✅ Extração concluída com sucesso.")
+
+if __name__ == "__main__":
+    headless = os.getenv("HEADLESS", "1") != "0"
+    url = "https://www.fabricadolivro.com.br/imprimir-livros2/26887"
+    dados = scrape(url=url, headless=headless)
+
+    linhas_excel = []
+    for item in dados:
+        linha = {
+            "Produto": item["Produto"],
+            "Preço Total": item["Preço Total"],
+            "Preço Unitário": item["Preço Unitário"],
+        }
+        for i, v in enumerate(item["Variações"]):
+            linha[f"Variação {i + 1}"] = v
+        for k, v in item["Resumo"].items():
+            linha[k] = v
+        linhas_excel.append(linha)
+
+    df = pd.DataFrame(linhas_excel)
+    df.to_excel("livro2_variacoes_completas.xlsx", index=False)
+
+    with open("livro2_variacoes_completas.json", "w", encoding="utf-8") as f:
+        json.dump(dados, f, indent=2, ensure_ascii=False)
+
+    print("✅ Extração concluída com sucesso.")
