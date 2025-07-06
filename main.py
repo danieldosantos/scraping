@@ -37,7 +37,7 @@ def scrape(url: str, headless: bool = True):
                     .evaluate("e => e.nextElementSibling.innerText")
                 )
                 preco_unitario = (
-                    pagina.locator("text=/VALOR UNIT\xc3\x81RIO/i")
+                    pagina.locator("text=/VALOR UNIT\u00c1RIO/i")
                     .nth(0)
                     .evaluate("e => e.nextElementSibling.innerText")
                 )
